@@ -9,7 +9,21 @@ steps:
         - failure
         - success
     commands:
-      - git clone https://${GIT_ACCESS_TOKEN}@github.com/${GIT_REPO}.git
+      # A post-contest evaluation grades exactly what the learner submitted: the saved snapshot when one is
+      # sent, else the pinned commit; either one that cannot be fetched fails the build rather than grading
+      # something else. A build that sends neither (a practice run) grades the repository as it is now.
+      - |
+        if [ -n "${SUBMISSION_TAR_GZ_URL}" ]; then
+          curl -fsSL --retry 3 -o /tmp/submission.tar.gz "${SUBMISSION_TAR_GZ_URL}" || exit 1
+          mkdir ${PROJECT_FOLDER_NAME} || exit 1
+          tar -xzf /tmp/submission.tar.gz -C ${PROJECT_FOLDER_NAME} --strip-components=1 || exit 1
+        elif [ -n "${PROJECT_GIT_REPO_COMMIT}" ]; then
+          git init -q ${PROJECT_FOLDER_NAME} || exit 1
+          git -C ${PROJECT_FOLDER_NAME} fetch -q --depth 1 https://${GIT_ACCESS_TOKEN}@github.com/${GIT_REPO}.git ${PROJECT_GIT_REPO_COMMIT} || exit 1
+          git -C ${PROJECT_FOLDER_NAME} checkout -q --detach FETCH_HEAD || exit 1
+        else
+          git clone --depth 1 https://${GIT_ACCESS_TOKEN}@github.com/${GIT_REPO}.git
+        fi
       - cd ${PROJECT_FOLDER_NAME} && mkdir cypress && cd ..
       - cp ./parser.js ${PROJECT_FOLDER_NAME}/parser.js
       - cp -r ./cypress/. ${PROJECT_FOLDER_NAME}/cypress/
